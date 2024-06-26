@@ -48,72 +48,121 @@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-                                Sanity Checker V3 (C) 2017-2023
+                  			     -=-=-=-=-=--=-=-=-=-=-=--=-=-=-=-=-=-
+                               Sanity Checker V3.2 (C) 2017-2024
                                 -=-=-=-=--=-=-=-=-=-=--=-=-=-=-
                                 Note:NOT for use by US citizens
 
+>Notes;
+-Do NOT run this "out of the box". It's a framework that will always be WIP depending on your needs.
+-Having skiddies constantly attempt to scan various webservers, I wrote a quick & dirty script to deal with the more-than-obvious proxy connects.
+-The routine grew a bit more as I learned more and more tricks, some of which are not 100% (hence "suspect" and other logs).
+-I would recommend you read through the script and leave it pure logging mode for now and scan logs for anything that's an obvious giveaway.
+-Changing of filenames in logs (and the script itself) is highly encouraged.
+-Should you enable the "auto add to .htaccess" at the end of this file, should $proxy = 4 then it will add to the list. Edit this code to suit your needs.
+
 Usage;
-Merely "include ('SanityV3.php');" at the start of your index page.
+Merely "include ('SanityV3.php');" at the start of your entry page, you really only need to run this once per visit, I would suggest you
+also check for sessions and such otherwise you'll fill your log files up REALLY fast.
 
 Currently can test for obvious, potential, and suspect proxies. Will spill most Elite Anon proxies.
 
-The logs are split into 3 files;
-pfound.txt  -   Obviously a proxy
-nam.txt     -   Hostname indicates it could be a proxy
-sus.txt     -   Suspect. Some ISPs don't use hostname resolve, but could also be a proxy. This is 
-                where you need to manually check the IP against hosts.
-                
+The logs are split into 4 files;
+found_log	-   Obviously a proxy
+name_log	-   Hostname indicates it could be a proxy
+suspect_log     -   Suspect. Some ISPs don't use hostname resolve, but could also be a proxy. This is 
+                    where you need to manually check the IP against hosts.
+request_log	-   Check the request type - "HEAD" can indicate a lame script attempt                    
 
-                                
 */
 
-// If you are using cookies on site, you can modify to divulge members who end up on this list and
-// can filter those out
-$cookieset=$_GET['cookie'];
-$sannick=$_COOKIE[$cookieid];
-if (strlen($sannick) <= 3) {
-$sannick=="-UNKNOWN-";
-}
-$remo = $_SERVER['REMOTE_ADDR'];
+// Name of log files by type - Might want to change these filenames to hide them better
+$found_log = 'proxy_found.txt';		// Yes, it's a proxy (or possibly a virtual machine or VPN (yes, those leak too))
+$suspect_log = 'suspect.txt';		// Worth keeping an eye on
+$name_log = 'named.txt';		// Obviously a webcache or mailer or some obvious named thing
+$request_log = 'request.txt';		// Found via "Request_Method" below - may want to keep disabled for casual users
+$useragent_log = 'user_agent.txt';	// Found via "User_Agent" - ban those pesky UA_spammer companies/scanners
 
+
+// Ban by REQUEST_METHOD - uncomment to use. Add and remove for your own use
+/*
+$rm = $_SERVER['REQUEST_METHOD'];
+foreach (array("HEAD","TRACE","DELETE","OPTIONS","MOVE","COPY","UPDATE","MERGE") as $t1)
+{
+if ($rm == $t1) 
+	{
+	// Remove comments on 3 lines below to add IP block
+	// $logme=fopen('.htaccess','a');
+	// fwrite($logme,"deny from " . $_SERVER['REMOTE_ADDR'] . "\n");
+	// fclose($logme);
+$now = date("d-m-y H:i:s OT");
+$logme=fopen($request_log,'a');
+fwrite($logme,"REQ: " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n");
+fclose($logme);
+	}
+}
+*/
+
+// Ban by USER_AGENT - uncomment to use. Add and remove for your own use
+/*
+$ua = $_SERVER['HTTP_USER_AGENT'];
+foreach (array("IonCrawl","Palo Alto","Go-http-client/1.1","Symfony BrowserKit","NetcraftSurveyAgent","fasthttp") as $t1)
+{
+if ($ua == $t1) 
+	{
+	// Remove comments on 3 lines below to add IP block
+	// $logme=fopen('.htaccess','a');
+	// fwrite($logme,"deny from " . $_SERVER['REMOTE_ADDR'] . "\n");
+	// fclose($logme);
+$now = date("d-m-y H:i:s OT");
+$logme=fopen($useragent_log,'a');
+fwrite($logme,"UAB: " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n");
+fclose($logme);
+	}
+}
+*/
+
+$remo = $_SERVER['REMOTE_ADDR'];
 $proxy = "Checkme";
 
-// Safe list (Do not check)
-foreach (array("195.188.152.10","24.66.","61.68.","209.78.","213.40.","82.153.100.","203.23.239.","194.81.161.150",
-"82.69.80.37","220.245.178.","62.254.0.16","82.42.171.194") as $t1)
+// Safe list (Do not check) which you may want to keep an eye on
+foreach (array("1.2.3.4") as $t1)
 {
 $subtest1 = stristr($remo,$t1);
 $blab1 = strlen($remo)-strlen($subtest1);
 if ($blab1 == 0) $proxy="DontCheck";
 }
 
+
 // HEADER tests. Using a list of known (and some lessor known) headers, may spill originating IP
 if ($proxy == "Checkme")
 {
 $now = date("d-m-y H:i:s OT");
-$logme=fopen('pfound.txt','a');
+
+$logme=fopen($found_log,'a');
 $proxy = 0;
-if (isset ($_SERVER['HTTP_VIA'])) { fwrite($logme,"P00: " . $_SERVER['HTTP_VIA'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['VIA'])) { fwrite($logme,"P01: " . $_SERVER['VIA'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['HTTP_X_FORWARDED_FOR'])) { fwrite($logme,"P02: " . $_SERVER['HTTP_X_FORWARDED_FOR'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['HTTP_FORWARDED'])) { fwrite($logme,"P03: " . $_SERVER['HTTP_FORWARDED'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['HTTP_FORWARDED_FOR'])) { fwrite($logme,"P04: " . $_SERVER['HTTP_FORWARDED_FOR'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['HTTP_X_FORWARDED'])) { fwrite($logme,"P05: " . $_SERVER['HTTP_X_FORWARDED'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['FORWARDED'])) { fwrite($logme,"P06: " . $_SERVER['FORWARDED'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['HTTP_X_BLUECOAT_VIA'])) { fwrite($logme,"P07: " . $_SERVER['HTTP_X_BLUECOAT_VIA'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['HTTP_PROXY____']))	{ fwrite($logme,"P08: " . $_SERVER['HTTP_PROXY____'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['HTTP_PROXY___________'])) { fwrite($logme,"P09: " . $_SERVER['HTTP_PROXY___________'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['HTTP_PROXY_CONNECTION'])) { fwrite($logme,"P10: " . $_SERVER['HTTP_PROXY_CONNECTION'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['HTTP_X_HOST'])) { fwrite($logme,"P11: " . $_SERVER['HTTP_X_HOST'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['HTTP_X_REFERER'])) { fwrite($logme,"P12: " . $_SERVER['HTTP_X_REFERER'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['HTTP_X_SERVER_HOSTNAME'])) { fwrite($logme,"P13: " . $_SERVER['HTTP_X_SERVER_HOSTNAME'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['PROXY_HOST'])) { fwrite($logme,"P14: " . $_SERVER['PROXY_HOST'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['PROXY_PORT'])) { fwrite($logme,"P15: " . $_SERVER['PROXY_PORT'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['PROXY_REQUEST'])) { fwrite($logme,"P16: " . $_SERVER['PROXY_REQUEST'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['HTTP_CLIENT_IP'])) { fwrite($logme,"P17: " . $_SERVER['HTTP_CLIENT_IP'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-//if (isset ($_SERVER['HTTP_PRAGMA'])) { fwrite($logme,"P18: " . $_SERVER['HTTP_PRAGMA'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['HTTP_X_COMING_FROM'])) { fwrite($logme,"P19: " . $_SERVER['HTTP_X_COMING_FROM'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
-if (isset ($_SERVER['HTTP_COMING_FROM'])) { fwrite($logme,"P20: " . $_SERVER['HTTP_COMING_FROM'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy = 4; }
+if (isset ($_SERVER['HTTP_VIA'])) { fwrite($logme,"P00: " . $_SERVER['HTTP_VIA'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['VIA'])) { fwrite($logme,"P01: " . $_SERVER['VIA'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['HTTP_X_FORWARDED_FOR'])) { fwrite($logme,"P02: " . $_SERVER['HTTP_X_FORWARDED_FOR'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['HTTP_FORWARDED'])) { fwrite($logme,"P03: " . $_SERVER['HTTP_FORWARDED'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['HTTP_FORWARDED_FOR'])) { fwrite($logme,"P04: " . $_SERVER['HTTP_FORWARDED_FOR'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['HTTP_X_FORWARDED'])) { fwrite($logme,"P05: " . $_SERVER['HTTP_X_FORWARDED'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['FORWARDED'])) { fwrite($logme,"P06: " . $_SERVER['FORWARDED'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['HTTP_X_BLUECOAT_VIA'])) { fwrite($logme,"P07: " . $_SERVER['HTTP_X_BLUECOAT_VIA'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['HTTP_PROXY____']))	{ fwrite($logme,"P08: " . $_SERVER['HTTP_PROXY____'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['HTTP_PROXY___________'])) { fwrite($logme,"P09: " . $_SERVER['HTTP_PROXY___________'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['HTTP_PROXY_CONNECTION'])) { fwrite($logme,"P10: " . $_SERVER['HTTP_PROXY_CONNECTION'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['HTTP_X_HOST'])) { fwrite($logme,"P11: " . $_SERVER['HTTP_X_HOST'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['HTTP_X_REFERER'])) { fwrite($logme,"P12: " . $_SERVER['HTTP_X_REFERER'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['HTTP_X_SERVER_HOSTNAME'])) { fwrite($logme,"P13: " . $_SERVER['HTTP_X_SERVER_HOSTNAME'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['PROXY_HOST'])) { fwrite($logme,"P14: " . $_SERVER['PROXY_HOST'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['PROXY_PORT'])) { fwrite($logme,"P15: " . $_SERVER['PROXY_PORT'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['PROXY_REQUEST'])) { fwrite($logme,"P16: " . $_SERVER['PROXY_REQUEST'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['HTTP_CLIENT_IP'])) { fwrite($logme,"P17: " . $_SERVER['HTTP_CLIENT_IP'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+// Removed this one as too many false positives, but up to you if you want to use it
+//if (isset ($_SERVER['HTTP_PRAGMA'])) { fwrite($logme,"P18: " . $_SERVER['HTTP_PRAGMA'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['HTTP_X_COMING_FROM'])) { fwrite($logme,"P19: " . $_SERVER['HTTP_X_COMING_FROM'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
+if (isset ($_SERVER['HTTP_COMING_FROM'])) { fwrite($logme,"P20: " . $_SERVER['HTTP_COMING_FROM'] . ":" . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy = 4; }
 
 if ((isset ($_SERVER['HTTP_VIA'])) ||
 (isset ($_SERVER['VIA'])) ||
@@ -122,9 +171,9 @@ if ((isset ($_SERVER['HTTP_VIA'])) ||
 (isset ($_SERVER['HTTP_FORWARDED_FOR'])) || 
 (isset ($_SERVER['HTTP_X_FORWARDED'])) || 
 (isset ($_SERVER['FORWARDED'])) || 
-(isset ($_SERVER['HTTP_X_BLUECOAT_VIA'])) || 
+(isset ($_SERVER['HTTP_X_BLUECOAT_VIA'])) || // This seems to spill Elite Proxies
 (isset ($_SERVER['HTTP_PROXY____']))	 || 
-(isset ($_SERVER['HTTP_PROXY___________'])) || 
+(isset ($_SERVER['HTTP_PROXY___________'])) || // Lessor known tag
 (isset ($_SERVER['HTTP_PROXY_CONNECTION'])) || 
 (isset ($_SERVER['HTTP_X_HOST'])) || 
 (isset ($_SERVER['HTTP_X_REFERER'])) || 
@@ -151,25 +200,37 @@ $ip = $_SERVER['REMOTE_ADDR'];
 $host = @gethostbyaddr($ip);
 
 // These are suspect due to hostname resolve issues
-$logme=fopen('sus.txt','a');
+$logme=fopen($suspect_log,'a');
 
-if ($host == $ip) { fwrite($logme,"S00: " . $host . " : " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy=4; }
-if (strlen($host) <= 8) { fwrite($logme,"S01: " . $host . " : "  . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy=4; }
+// No hostname, this COULD be a crappy server config so likely to give false positives - hence suspect file
+if ($host == $ip) { fwrite($logme,"S00: " . $host . " : " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy=4; }
+if (strlen($host) <= 8) { fwrite($logme,"S01: " . $host . " : "  . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy=4; }
 $temp = explode(".",$host);
 $tempx = count($temp);
-if ($tempx <= 1) { fwrite($logme,"S02: "  . $host . " : " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy=4; }
+if ($tempx <= 1) { fwrite($logme,"S02: "  . $host . " : " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy=4; }
 fclose($logme);
 
 // Look for keywords that may possibly indicate a proxy in the hostname
-$logme=fopen('nam.txt','a');
+$logme=fopen($name_log,'a');
 $host = @gethostbyaddr($ip);
 $host = strtolower($host);
-if(strstr($host,"prox")) { fwrite($logme,"N00: "  . $host . " : " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy=4;}
-if(strstr($host,"cache")) { fwrite($logme,"N01: "  . $host . " : " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy=4;}
-if(strstr($host,"www")) { fwrite($logme,"N02: "  . $host . " : " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy=4;}
-if(strstr($host,"mail")) { fwrite($logme,"N03: "  . $host . " : " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy=4;}
-if(strstr($host,"web")) { fwrite($logme,"N05: "  . $host . " : " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy=4;}
-if(strstr($host,"news")) { fwrite($logme,"N06: "  . $host . " : " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . " - USER: " . $sannick . "\n"); $proxy=4;}
+
+/*
+	Although these appear in the hostname, it's not always 100% a proxy. 
+	Prox	- If this appears anywhere, it's pretty obvious it's a proxy
+	cache	- Another proxy giveaway
+	www	- Who uses a "www" anything in a hostname ?
+	mail	- Often used as proxies
+	web 	- See www
+	news	- Likely a BNC
+*/
+
+if(strstr($host,"prox")) { fwrite($logme,"N00: "  . $host . " : " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy=4;}
+if(strstr($host,"cache")) { fwrite($logme,"N01: "  . $host . " : " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy=4;}
+if(strstr($host,"www")) { fwrite($logme,"N02: "  . $host . " : " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy=4;}
+if(strstr($host,"mail")) { fwrite($logme,"N03: "  . $host . " : " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy=4;}
+if(strstr($host,"web")) { fwrite($logme,"N05: "  . $host . " : " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy=4;}
+if(strstr($host,"news")) { fwrite($logme,"N06: "  . $host . " : " . $_SERVER['REMOTE_ADDR'] . " - " . $now . " REQ:" . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'] . " - REF: " . $_SERVER['HTTP_REFERER'] . " - UA: " . $_SERVER['HTTP_USER_AGENT'] . "\n"); $proxy=4;}
 fclose($logme);
 
 
